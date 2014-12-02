@@ -22,7 +22,7 @@ class Dispatcher(asyncore.dispatcher_with_send):
     def __init__(self, (sock, addr)):
         # initialize dispatcher
         asyncore.dispatcher_with_send.__init__(self, sock)
-        # assign socket properties        
+        # assign socket properties
         self.buffer   = ''
         self.callback = None
         self.address  = ':'.join(map(str, addr))
@@ -87,13 +87,14 @@ class Dispatcher(asyncore.dispatcher_with_send):
         logger.info("Client [%s] disconnected." % (
             self.address))
 
+
 class Client(Dispatcher):
     def __init__(self, server, sock):
         # initialize dispatcher
         Dispatcher.__init__(self, sock)
 
         # assign instance properties
-        self.server = server 
+        self.server = server
         self.player = None
 
         # greet player
@@ -115,18 +116,18 @@ class Client(Dispatcher):
 
     def read(self):
         # read data from dispatcher
-        data = Dispatcher.read(self)                
+        data = Dispatcher.read(self)
         # return if player is not authenticated
         if not self.player.authed: return
         # return prompt if no data was returned
-        if not data: 
+        if not data:
             self.write_prompt()
             return
 
         # split data by words
         words = data.strip().split(' ')
         # return if no human readable input was found
-        if not words: 
+        if not words:
             self.write_prompt("What?")
             return
 
@@ -161,4 +162,4 @@ class Client(Dispatcher):
         # output message if requested
         if msg: self.write(msg)
         # output player prompt
-        self.write(self.player.prompt, False)        
+        self.write("%s > " % self.player.prompt, False)

@@ -23,10 +23,11 @@ def validate_email(email):
     if not validate_email_pattern.match(email): return False
     return True
 
+
 class PlayerInteractions(object):
     def init(self):
         # require password upon return
-        if self.uuid: 
+        if self.uuid:
             self.client.prompt("Please enter your password: ", self.enter_password)
             return
         # require password verification upon creation
@@ -52,7 +53,7 @@ class PlayerInteractions(object):
             self.client.prompt("Incorrect password. Please enter your password: ", self.enter_password)
             return
         # save player
-        self.player.save()
+        self.save()
         # authenticate player
         self.auth("Welcome back!")
 
@@ -156,9 +157,6 @@ class PlayerInteractions(object):
         # authenticate player
         self.auth("Welcome. Please enjoy the MUD!")
 
-    def auth(self, msg=None):
-        self.authed = True
-        if msg: self.client.write(msg)
 
 class Player(PlayerInteractions):
     def __init__(self, client, name):
@@ -185,19 +183,29 @@ class Player(PlayerInteractions):
         return 2000
 
     @property
+    def __prompt(self):
+        # get prompt template or default
+        return getattr(self, '_prompt', PROMPT)
+    @__prompt.setter
+    def __prompt(self, prompt):
+        # set prompt template
+        self._prompt = prompt
+    @property
     def prompt(self):
         import random
-        prompt = getattr(self, 'PROMPT', PROMPT)
-        return "%s > " % prompt.format(
+        # return formatted prompt template
+        return self.__prompt.format(
             hp=random.randint(1, self.max_hp), max_hp=self.max_hp,
             sp=random.randint(1, self.max_sp), max_sp=self.max_sp,
             mp=random.randint(1, self.max_mp), max_mp=self.max_mp
         )
     @prompt.setter
     def prompt(self, prompt):
-        self.PROMPT = prompt
+        # set prompt template
+        self._prompt = prompt
 
     def load(self):
+        # attempt to load data from file
         try:
             with open('players/%s.json' % self.name, 'r') as f:
                 data = json.load(f)
@@ -208,14 +216,23 @@ class Player(PlayerInteractions):
             setattr(self, key, val)
 
     def save(self, msg=None):
+        # serialize data
         data = {
-            'PROMPT': self.prompt,
+            '_prompt': self.__prompt,
             'uuid': self.uuid,
             'admin': self.admin,
             'name': self.name,
             'email': self.email,
             'password': self.password
         }
+        # write data to file
         with open('players/%s.json' % self.name, 'w') as f:
             json.dump(data, f)
+        # output message to client if requested
+        if msg: self.client.write(msg)
+
+    def auth(self, msg=None):
+        # authenticate client
+        self.authed = True
+        # output message to client if requested
         if msg: self.client.write(msg)
