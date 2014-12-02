@@ -43,7 +43,7 @@ class PlayerInteractions(object):
     def enter_password(self, password):
         # determine current attempts
         self._enter_password_attempt = getattr(self, '_enter_password_attempt', 0) + 1
-        # disconnect on maximum attempts
+        # disconnect client on maximum attempts
         if self._enter_password_attempt > 3:
             self.client.write("Maximum password attempts. Disconnecting...")
             self.client.close()
@@ -52,8 +52,28 @@ class PlayerInteractions(object):
         if hash_password(self.uuid + password) != self.password:
             self.client.prompt("Incorrect password. Please enter your password: ", self.enter_password)
             return
-        # save player
-        self.save()
+        # reconnect if a session is found
+        if self.uuid in self.client.server.sessions:
+            def reconnect():
+                 # inform players of new player
+                self.client.server.inform(self.client, "has reconnected")
+                # authenticate player
+                self.auth("Reconnected.")
+            # reconnect client if not currently connected
+            if not self.client.server.sessions[self.uuid].get('connected', False):
+                reconnect()
+                return
+            def override(response):
+                if not response or response.lower() == 'y':
+                    # reconnect client
+                    reconnect()
+                else:
+                    # disconnect client
+                    self.client.close()
+            self.client.prompt("Character currently logged in. Override? [Y/n]:", override)
+            return
+        # inform players of new player
+        self.client.server.inform(self.client, "has entered the MUD")
         # authenticate player
         self.auth("Welcome back!")
 
@@ -64,8 +84,7 @@ class PlayerInteractions(object):
             self._create_attempt = getattr(self, '_create_attempt', 0) + 1
             # disconnect on maximum attempts
             if self._create_attempt > 3:
-                self.client.write("Maximum creation attempts. Disconnecting...")
-                self.client.close()
+                self.client.close("Maximum creation attempts. Disconnecting...")
                 return
             # prompt for required password
             self.client.prompt("A password required. Please enter a password: ", self.create)
@@ -84,8 +103,7 @@ class PlayerInteractions(object):
             self._verify_password_attempt = getattr(self, '_verify_password_attempt', 0) + 1
             # disconnect on maximum attempts
             if self._verify_password_attempt > 2:
-                self.client.write("Maximum password verification attempts. Disconnecting...")
-                self.client.close()
+                self.client.close("Maximum password verification attempts. Disconnecting...")
                 return
             # reset verification attempts
             self._verify_password = 0
@@ -99,8 +117,7 @@ class PlayerInteractions(object):
             self._verify_password = getattr(self, '_verify_password', 0) + 1
             # disconnect on maximum attempts
             if self._verify_password > 3:
-                self.client.write("Maximum password verification attempts. Disconnecting...")
-                self.client.close()
+                self.client.close("Maximum password verification attempts. Disconnecting...")
                 return
             self.client.prompt("Passwords do not match. Please verify your password: ", self.verify_password)
             return
@@ -114,8 +131,7 @@ class PlayerInteractions(object):
             self._enter_email_attempt = getattr(self, '_enter_email_attempt', 0) + 1
             # disconnect on maximum attempts
             if self._enter_email_attempt > 3:
-                self.client.write("Maximum email verification attempts. Disconnecting...")
-                self.client.close()
+                self.client.close("Maximum email verification attempts. Disconnecting...")
                 return
             # prompt for required email
             self.client.prompt("A valid email address required. Please enter a valid email address: ", self.enter_email)
@@ -132,8 +148,7 @@ class PlayerInteractions(object):
             self._verify_email_attempt = getattr(self, '_verify_email_attempt', 0) + 1
             # disconnect on maximum attempts
             if self._verify_email_attempt > 2:
-                self.client.write("Maximum email address verification attempts. Disconnecting...")
-                self.client.close()
+                self.client.close("Maximum email address verification attempts. Disconnecting...")
                 return
             # reset verification attempts
             self._verify_email = 0
@@ -147,8 +162,7 @@ class PlayerInteractions(object):
             self._verify_email = getattr(self, '_verify_email', 0) + 1
             # disconnect on maximum attempts
             if self._verify_email > 3:
-                self.client.write("Maximum email address verification attempts. Disconnecting...")
-                self.client.close()
+                self.client.close("Maximum email address verification attempts. Disconnecting...")
                 return
             self.client.prompt("Email addresses do not match. Please verify your email: ", self.verify_email)
             return
@@ -166,7 +180,7 @@ class Player(PlayerInteractions):
         self.authed = False
         # assign instance properties
         self.client   = client
-        self.name     = name
+        self.name     = name[0].upper() + name[1:]
         self.email    = ''
         self.password = ''
         # load character data
@@ -232,6 +246,17 @@ class Player(PlayerInteractions):
         if msg: self.client.write(msg)
 
     def auth(self, msg=None):
+        # save player
+        self.save()
+        # intiialize client session
+        if self.uuid not in self.client.server.sessions:
+            self.client.server.sessions[self.uuid] = {}
+        # set connected session flag
+        self.client.server.sessions[self.uuid]['connected'] = True
+        # override other sessions
+        for client in self.client.server.clients:
+            if client != self.client and client.player.uuid == self.uuid:
+                client.close("Your character is being overridden!\nGoodbye.")
         # authenticate client
         self.authed = True
         # output message to client if requested

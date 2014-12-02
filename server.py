@@ -19,18 +19,19 @@ class Server(asyncore.dispatcher):
     # default address
     address = '0.0.0.0'
 
-    def __init__(self, **kwargs):        
+    def __init__(self, **kwargs):
         # initialize dispatcher
         asyncore.dispatcher.__init__(self)
         # create socket
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         # reuse address
         self.set_reuse_addr()
-        # assign server properties        
+        # assign server properties
         self.port    = int(kwargs.get('port', self.port))
         self.address = kwargs.get('address', self.address)
         # assign instance properties
         self.clients = []
+        self.sessions = {}
 
     def start(self):
         # log server start request
@@ -49,13 +50,36 @@ class Server(asyncore.dispatcher):
 
     def stop(self):
         # log server stop request
-        logger.info("Stopping server...")        
+        logger.info("Stopping server...")
         # close server socket
         self.close()
         # log server stop
         logger.info("Server stopped.")
         # end server loop
         raise asyncore.ExitNow
+
+    def wall(self, msg, condition=None):
+        # get list of clients
+        clients = self.clients
+        # apply filter if requrested
+        if condition: clients = filter(condition, self.clients)
+        # iterate clients
+        for client in clients:
+            # write message to each client
+            client.write(msg)
+
+    # todo: convert to 'chat' command, 'admin.inform'
+    def inform(self, client, msg):
+        # determine player
+        player = client.player
+        # determine wall post message
+        msg = "<inform> %s %s" % (player.name, msg)
+        # append period since 'inform' is informative
+        if not msg.endswith('.'): msg += '.'
+        # determine wall post condition
+        cond = lambda x: x.player.uuid != player.uuid
+        # post inform message to wall
+        self.wall(msg, cond)
 
     def handle_accept(self):
         # accept connection
@@ -70,7 +94,6 @@ class Server(asyncore.dispatcher):
         logger.info("Client [%s] connected." % client.address)
         # append client to server clients
         self.clients.append(client)
-
 
 if __name__ == '__main__':
     import argparse
@@ -100,7 +123,7 @@ if __name__ == '__main__':
     # intitialize log formatter
     formatter = logging.Formatter(logger.format)
     # if console output requested
-    if not args.silent:        
+    if not args.silent:
         # determine log level
         log_level = getattr(logging, args.log_level.upper())
         # set console log handler

@@ -12,7 +12,10 @@ class quit(Command):
     def __call__(self, *args):
         # save player
         self.player.save()
-        # goodbye player
-        self.player.client.write("Goodbye.")
+        # inform players of player departure
+        self.player.client.server.inform(self.player.client,
+            "%s has left the MUD." % self.player.name)
+        # remove client session
+        del self.player.client.server.sessions[self.player.uuid]
         # quit player
         self.player.client.close()

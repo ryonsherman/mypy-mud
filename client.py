@@ -78,14 +78,26 @@ class Dispatcher(asyncore.dispatcher_with_send):
             return self.read()
 
     def handle_close(self):
+        # check if connection has a player
+        if self.player and self.player.uuid in self.server.sessions:
+            self.server.sessions[self.player.uuid]['connected'] = False
+            # inform players of player disconnection
+            self.server.inform(self, "has disconnected")
+
+        # close connection
+        self.close(None)
         # remote server client
         self.server.clients.remove(self)
-        # close connection
-        self.close()
 
         # log disconnection
         logger.info("Client [%s] disconnected." % (
             self.address))
+
+    def close(self, msg="Goodbye."):
+        # write message
+        if msg: self.write(msg)
+        # call dispatcher close
+        asyncore.dispatcher_with_send.close(self)
 
 
 class Client(Dispatcher):
@@ -105,7 +117,7 @@ class Client(Dispatcher):
         # require character name
         if not name:
             self.write("Character name required. Disconnecting...")
-            self.close()
+            self.close(None)
 
         #self.write("Character creation currently disabled. Sorry!")
         #self.disconnect()
