@@ -1,1 +1,0 @@
-chat/newbie.py
